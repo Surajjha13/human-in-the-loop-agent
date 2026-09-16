@@ -40,6 +40,33 @@ Typing anything other than `yes`/`y` declines the action and leaves the
 file untouched. Recursive directory deletes ask for the directory's exact
 name instead of `yes`.
 
+## How it works
+
+```
+user prompt
+   │
+   ▼
+agent/runtime.py  ──calls──▶  Groq chat.completions (tool calling)
+   │                                   │
+   │                          returns a tool_call
+   ▼                                   │
+execute_tool_call() ◀──────────────────┘
+   │  maps tool name → action, forwards to dispatch()
+   ▼
+agent/agent.py: dispatch()
+   │  is_destructive(action)?
+   ├─ No  → run the file_tools function directly, return result
+   └─ Yes → describe_action() builds a human-readable prompt
+            confirm() / confirm_recursive_delete() blocks for input
+            approved → run file_tools function, log "approved"
+            declined → skip, log "declined", report back to caller
+```
+
+The LLM never touches the filesystem directly — it can only ask for a tool
+call, and every tool call is forced through `dispatch()`. See
+[`UNDERSTAND.md`](./UNDERSTAND.md) for the full design rationale, a
+line-by-line walkthrough, and interview-style Q&A about the architecture.
+
 ## Layout
 
 - `agent/tools/file_tools.py` — pure filesystem operations.
